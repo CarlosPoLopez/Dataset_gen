@@ -11,7 +11,7 @@
 module purge
 module load cesga/system miniconda3
 
-ID=$(python -c "import time; print($SLURM_ARRAY_TASK_ID + int(time.time()) % 100000)")
+ID="${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}"
 
 echo "Generando laberinto $ID..."
 python main_ida.py $ID && python main_vuelta.py $ID

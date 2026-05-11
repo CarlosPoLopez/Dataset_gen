@@ -5,6 +5,7 @@ from bucle import dufort_frankel
 from generar_laberinto import generar_laberinto
 from generar_laberinto import generar_laberinto_3
 from collections import deque
+import sys
 
 def laberinto_tiene_solucion(matriz, start, end):
 
@@ -37,9 +38,8 @@ def laberinto_tiene_solucion(matriz, start, end):
     # Si la cola se vacía y no hemos llegado, no hay solución
     return False
 
-# Get the array ID (default to 999 if testing locally)
-import sys
-job_id = os.getenv('SLURM_ARRAY_TASK_ID') or sys.argv[1]
+
+job_id = sys.argv[1] if len(sys.argv) > 1 else os.getenv('SLURM_ARRAY_TASK_ID', '999')
 np.random.seed(int(job_id))
 
 N = 500

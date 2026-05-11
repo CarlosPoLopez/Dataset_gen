@@ -4,7 +4,7 @@ import os
 from bucle import FCTS
 
 import sys
-job_id = os.getenv('SLURM_ARRAY_TASK_ID') or sys.argv[1]    
+job_id = sys.argv[1] if len(sys.argv) > 1 else os.getenv('SLURM_ARRAY_TASK_ID', '999')
 
 N = 500
 T = 200000
