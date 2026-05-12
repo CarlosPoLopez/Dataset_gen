@@ -33,6 +33,31 @@ def generar_laberinto(L, l, n, grosor=4):
     return _limpiar_generadores(A, N)
 
 
+def generar_laberinto_2(L=501, canal=30, peso=-0.3, grosor=3):
+    """
+    Generador basado en el algoritmo MATLAB original.
+    Coloca muros en 2 direcciones por celda (abajo y derecha),
+    sin restricción de conectividad.
+    """
+    N    = L - 1
+    dimx = L
+    A    = np.zeros((dimx, dimx))
+
+    for i in range(0, dimx - canal, canal):
+        for j in range(0, dimx - canal, canal):
+            if round(peso + np.random.rand()) == 1:
+                A[i:i+grosor, j:j+canal+1] = 1   # muro arriba de la celda
+            if round(peso + np.random.rand()) == 1:
+                A[i:i+canal+1, j:j+grosor] = 1   # muro izquierda de la celda
+
+    A[:, :grosor]  = 1
+    A[:, -grosor:] = 1
+    A[:grosor, :]  = 1
+    A[-grosor:, :] = 1
+
+    return _limpiar_generadores(A, N)
+
+
 def generar_laberinto_3(L=501, canal=75, peso=-0.3):
     N    = L - 1
     dimx = L
@@ -73,8 +98,9 @@ def generar_laberinto_3(L=501, canal=75, peso=-0.3):
 
 
 if __name__ == '__main__':
-    lab = generar_laberinto(L=501, l=65, n=0.67, grosor=4)
-    plt.figure(figsize=(6,6))
+    #lab = generar_laberinto(L=501, l=65, n=0.67, grosor=4)
+    #lab = generar_laberinto_2(L=501, canal=55, peso=-0.3, grosor = 3)
+    lab = generar_laberinto_3(L=1001, canal=85, peso=-0.3)
     plt.pcolormesh(lab, cmap='binary')
     plt.axis('off')
     plt.tight_layout()

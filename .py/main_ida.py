@@ -44,7 +44,7 @@ np.random.seed(int(job_id))
 
 N = 500
 L = N + 1
-T = 860000 
+T = 780000 
 
 #Genera laberintos hasta que encuentre uno con salida
 intentos = 0

@@ -7,7 +7,7 @@ import sys
 job_id = sys.argv[1] if len(sys.argv) > 1 else os.getenv('SLURM_ARRAY_TASK_ID', '999')
 
 N = 500
-T = 200000
+T = 180000
 
 deltat = 0.002
 deltax = 0.25      

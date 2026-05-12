@@ -227,6 +227,15 @@ def run(borrar=False):
                 if estado != 'NO EXISTE':
                     print(f"           ↳ .png {accion}  : {os.path.basename(p)}")
 
+    # ── Limpieza final: todos los ida_*.png en Dataset_Plots ───────
+    pngs_ida = sorted(glob.glob(f'{DIR_PLOTS}ida_*.png'))
+    if pngs_ida:
+        print(f"  Limpieza ida_*.png en {DIR_PLOTS}:")
+        for path in pngs_ida:
+            if borrar:
+                os.remove(path)
+            print(f"    {'BORRADO' if borrar else 'A BORRAR'}: {os.path.basename(path)}")
+
     print(f"\n{'='*65}")
     print(f"  Analizados   : {validos + eliminados}")
     print(f"  Válidos      : {validos}")
@@ -234,6 +243,8 @@ def run(borrar=False):
     if eliminados:
         print(f"    · Camino roto   : {motivos['roto']}")
         print(f"    · Doble camino  : {motivos['doble']}")
+    if pngs_ida:
+        print(f"  ida_*.png    : {len(pngs_ida)}{'  (borrados)' if borrar else '  (a borrar)'}")
     print(f"{'='*65}\n")
 
 

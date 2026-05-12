@@ -6,7 +6,7 @@
 #SBATCH -c 16
 #SBATCH --mem=16G
 #SBATCH -t 8:00:00
-#SBATCH --array=1-20
+#SBATCH --array=1-50%30
 
 module purge
 module load cesga/system miniconda3
