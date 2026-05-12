@@ -1,6 +1,7 @@
 import numpy as np
 import os
 import glob
+from collections import deque
 
 # ═══════════════════════════════════════════════
 #  CONFIGURACIÓN
@@ -10,12 +11,13 @@ TOLERANCIA       = 0.15
 UMBRAL_AMARILLO  = U_MAX - TOLERANCIA   # 0.727
 
 MIN_CELDAS       = 500
+MIN_AREA_AGUJERO = 200   # píxeles²; ignora artefactos pequeños del fondo
 
 DIR         = 'Dataset_Matrices/'
 DIR_PLOTS   = 'Dataset_Plots/'
 
 # ═══════════════════════════════════════════════
-#  FUNCIÓN DE VALIDACIÓN
+#  FUNCIÓN 1 — CAMINO ROTO / NO CONECTADO
 # ═══════════════════════════════════════════════
 
 def camino_es_valido(solucion, laberinto):
@@ -25,37 +27,80 @@ def camino_es_valido(solucion, laberinto):
     un componente conexo que toque ambas esquinas del laberinto.
     """
     N = solucion.shape[0] - 1
-    activas = solucion >= UMBRAL_AMARILLO
+    activas   = solucion >= UMBRAL_AMARILLO
     n_activas = int(np.sum(activas))
 
     if n_activas < MIN_CELDAS:
         return False, n_activas
 
-    from collections import deque
     inicio   = (5, 5)
     fin_zona = (N - 85, N - 85)
 
     if not activas[inicio]:
         return False, n_activas
 
-    visitados = np.zeros_like(activas, dtype=bool)
+    visitados        = np.zeros_like(activas, dtype=bool)
     visitados[inicio] = True
-    cola = deque([inicio])
-    alcanza_fin = False
+    cola             = deque([inicio])
+    alcanza_fin      = False
 
     while cola:
         x, y = cola.popleft()
         if x >= fin_zona[0] and y >= fin_zona[1]:
             alcanza_fin = True
             break
-        for dx, dy in ((-1,0),(1,0),(0,-1),(0,1)):
-            nx, ny = x+dx, y+dy
+        for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            nx, ny = x + dx, y + dy
             if 0 <= nx <= N and 0 <= ny <= N:
                 if activas[nx, ny] and not visitados[nx, ny]:
                     visitados[nx, ny] = True
                     cola.append((nx, ny))
 
     return alcanza_fin, n_activas
+
+
+# ═══════════════════════════════════════════════
+#  FUNCIÓN 2 — DOBLE CAMINO (BUCLE/LOOP)
+# ═══════════════════════════════════════════════
+
+def camino_tiene_doble(solucion):
+    """
+    Devuelve (bool, int) → (tiene_doble, nº agujeros detectados).
+
+    Principio topológico: un camino simple es una línea abierta
+    (sin ciclos). Un doble camino forma un bucle cerrado, que al
+    binarizar la imagen deja uno o más "agujeros" encerrados en el
+    fondo oscuro. Se cuentan esas regiones de fondo aisladas.
+
+    Pasos:
+      1. Umbralizar → máscara binaria del camino.
+      2. Invertir   → regiones de fondo.
+      3. Etiquetar  → componentes conexos del fondo (4-conn).
+      4. El exterior (mayor área) se descarta; el resto son agujeros.
+      5. Si hay ≥ 1 agujero con área > MIN_AREA_AGUJERO → doble camino.
+    """
+    from skimage.measure import label, regionprops
+    from skimage.morphology import binary_closing, disk
+
+    # 1. Binarizar
+    binaria = (solucion >= UMBRAL_AMARILLO).astype(np.uint8)
+
+    # 2. Cierre morfológico suave para cerrar micro-gaps sin alterar topología
+    binaria = binary_closing(binaria, disk(3)).astype(np.uint8)
+
+    # 3. Invertir y etiquetar fondo
+    fondo   = 1 - binaria
+    etiq    = label(fondo, connectivity=1)   # 4-conectividad
+    props   = regionprops(etiq)
+
+    if not props:
+        return False, 0
+
+    # 4. Descartar la región exterior (la de mayor área)
+    area_max = max(r.area for r in props)
+    agujeros = [r for r in props if r.area < area_max and r.area >= MIN_AREA_AGUJERO]
+
+    return len(agujeros) > 0, len(agujeros)
 
 
 # ═══════════════════════════════════════════════
@@ -113,40 +158,51 @@ def run(borrar=False):
 
     validos    = 0
     eliminados = 0
+    motivos    = {'roto': 0, 'doble': 0}
 
     for f in ficheros:
-        job_id = os.path.basename(f).replace('muestra_', '').replace('.npz', '')
+        job_id    = os.path.basename(f).replace('muestra_', '').replace('.npz', '')
         datos     = np.load(f)
         solucion  = datos['solucion']
         laberinto = datos['laberinto']
 
+        # ── Criterio 1: camino roto / no conectado ──────────────────
         valido, n_celdas = camino_es_valido(solucion, laberinto)
 
-        # ── Archivos .npy asociados (se borran SIEMPRE, fallen o no) ──
+        # ── Criterio 2: doble camino (solo si el 1 pasa) ────────────
+        tiene_doble, n_agujeros = (False, 0)
+        if valido:
+            tiene_doble, n_agujeros = camino_tiene_doble(solucion)
+
+        # ── Clasificación final ──────────────────────────────────────
+        es_bueno = valido and not tiene_doble
+
         npy_asociados = npy_de_muestra(job_id)
 
-        if valido:
-            print(f"  [{job_id:>4}]  OK      {n_celdas:>7} celdas activas")
+        if es_bueno:
+            print(f"  [{job_id:>6}]  OK          {n_celdas:>7} celdas")
             validos += 1
 
-            # Borrar .npy aunque el .npz sea válido
+            # Los .npy intermedios ya no hacen falta si el .npz es bueno
             log_npy = []
             for path in npy_asociados:
                 borrar_fichero(path, borrar, log_npy)
-            if borrar:
-                borrados = [e for e in log_npy if e[0] == 'OK']
-                if borrados:
-                    for _, p in borrados:
-                        print(f"           ↳ .npy borrado : {os.path.basename(p)}")
-            else:
-                existentes = [e for e in log_npy if e[0] == 'PENDIENTE']
-                if existentes:
-                    for _, p in existentes:
-                        print(f"           ↳ .npy a borrar: {os.path.basename(p)}")
+            accion = 'borrado' if borrar else 'a borrar'
+            for estado, p in log_npy:
+                if estado != 'NO EXISTE':
+                    print(f"           ↳ .npy {accion}  : {os.path.basename(p)}")
 
         else:
-            print(f"  [{job_id:>4}]  FALLO   {n_celdas:>7} celdas activas  {'→ BORRADO' if borrar else ''}")
+            # Determinar motivo para el log
+            if not valido:
+                motivo_str = f"ROTO        {n_celdas:>7} celdas"
+                motivos['roto'] += 1
+            else:
+                motivo_str = f"DOBLE CAMINO  {n_agujeros} bucle{'s' if n_agujeros > 1 else ''}"
+                motivos['doble'] += 1
+
             eliminados += 1
+            print(f"  [{job_id:>6}]  {motivo_str}{'  → BORRADO' if borrar else ''}")
 
             # Borrar el .npz
             if borrar:
@@ -159,7 +215,7 @@ def run(borrar=False):
             for path in npy_asociados:
                 borrar_fichero(path, borrar, log_npy)
 
-            # Borrar plots (ida y vuelta) solo en caso de fallo
+            # Borrar plots (ida y vuelta)
             log_plots = []
             for path in plots_fallidos(job_id):
                 borrar_fichero(path, borrar, log_plots)
@@ -167,13 +223,17 @@ def run(borrar=False):
             accion = 'borrado' if borrar else 'a borrar'
             for _, p in log_npy:
                 print(f"           ↳ .npy {accion}  : {os.path.basename(p)}")
-            for _, p in [(s, p) for s, p in log_plots if s != 'NO EXISTE']:
-                print(f"           ↳ .png {accion}  : {os.path.basename(p)}")
+            for estado, p in log_plots:
+                if estado != 'NO EXISTE':
+                    print(f"           ↳ .png {accion}  : {os.path.basename(p)}")
 
     print(f"\n{'='*65}")
-    print(f"  Analizados : {validos + eliminados}")
-    print(f"  Válidos    : {validos}")
-    print(f"  Fallidos   : {eliminados}{'  (borrados)' if borrar else '  (conservados en modo seguro)'}")
+    print(f"  Analizados   : {validos + eliminados}")
+    print(f"  Válidos      : {validos}")
+    print(f"  Fallidos     : {eliminados}{'  (borrados)' if borrar else '  (conservados en modo seguro)'}")
+    if eliminados:
+        print(f"    · Camino roto   : {motivos['roto']}")
+        print(f"    · Doble camino  : {motivos['doble']}")
     print(f"{'='*65}\n")
 
 
