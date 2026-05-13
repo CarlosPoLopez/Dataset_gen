@@ -97,10 +97,114 @@ def generar_laberinto_3(L=501, canal=75, peso=-0.3):
     return _limpiar_generadores(A, N)
 
 
+def generar_laberinto_perfecto(dimx=1001, canal=50, grosor_pared=3, semilla=None):
+    """
+    Genera un laberinto perfecto mediante backtracking DFS.
+ 
+    Propiedades garantizadas:
+      - Sin islas: toda pared tiene al menos un extremo tocando el perímetro
+        o conectado a otra pared que lo hace (el conjunto de paredes es conexo).
+      - Sin bucles: hay exactamente un camino entre cualquier par de celdas.
+      - Completamente resoluble: todas las celdas son alcanzables.
+ 
+    Parámetros
+    ----------
+    dimx        : tamaño del array cuadrado de salida (píxeles).
+    canal       : tamaño interior de cada celda en píxeles.
+    grosor_pared: grosor de las paredes entre celdas (y del perímetro).
+    semilla     : semilla opcional para np.random (reproducibilidad).
+ 
+    Devuelve
+    --------
+    aa : np.ndarray de forma (dimx, dimx), dtype int
+         1 = pared, 0 = pasillo/celda abierta.
+ 
+    Cómo funciona
+    -------------
+    1. Se parte de una matriz completamente llena de paredes (todo 1).
+    2. Se organiza una rejilla de celdas separadas por paredes de 'grosor_pared'.
+    3. El DFS iterativo visita cada celda exactamente una vez y "talla"
+       el pasillo hacia su vecino: abre tanto la celda destino como la
+       franja de pared que las separa.
+    4. Al ser un árbol generador (spanning tree), el grafo de paredes
+       resultante es conexo y no hay paredes flotantes.
+    """
+    if semilla is not None:
+        np.random.seed(semilla)
+ 
+    gp = grosor_pared  # alias corto
+ 
+    # Número de celdas que caben en cada dimensión
+    nc = (dimx - gp) // (canal + gp)
+ 
+    # Espacio real ocupado por el laberinto
+    dimx_real = nc * (canal + gp) + gp
+ 
+    # Offset para centrar el laberinto dentro del array de tamaño dimx
+    offset = (dimx - dimx_real) // 2
+ 
+    # Posición en píxeles de la esquina superior-izquierda de la celda (i, j)
+    def px(k):
+        return offset + gp + k * (canal + gp)
+ 
+    # ── Inicializar: todo paredes ──────────────────────────────────────────
+    aa = np.ones((dimx, dimx), dtype=int)
+ 
+    # ── DFS iterativo ──────────────────────────────────────────────────────
+    visited = np.zeros((nc, nc), dtype=bool)
+ 
+    # Abrir celda inicial (0, 0)
+    r0, c0 = 0, 0
+    aa[px(r0):px(r0)+canal, px(c0):px(c0)+canal] = 0
+    visited[r0, c0] = True
+ 
+    stack = [(r0, c0)]
+    direcciones = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+ 
+    while stack:
+        r, c = stack[-1]
+ 
+        # Vecinos no visitados
+        vecinos = [
+            (r + dr, c + dc)
+            for dr, dc in direcciones
+            if 0 <= r + dr < nc and 0 <= c + dc < nc
+            and not visited[r + dr, c + dc]
+        ]
+ 
+        if vecinos:
+            # Elegir vecino al azar
+            nr, nc_ = vecinos[np.random.randint(len(vecinos))]
+ 
+            # ── Abrir la pared entre (r,c) y (nr,nc_) ──────────────────
+            if nr == r:          # misma fila → pared vertical entre columnas
+                jmin = min(c, nc_)
+                # franja de columnas entre las dos celdas
+                aa[px(r):px(r)+canal, px(jmin)+canal:px(jmin)+canal+gp] = 0
+            else:                # misma columna → pared horizontal entre filas
+                imin = min(r, nr)
+                aa[px(imin)+canal:px(imin)+canal+gp, px(c):px(c)+canal] = 0
+ 
+            # ── Abrir celda destino ─────────────────────────────────────
+            aa[px(nr):px(nr)+canal, px(nc_):px(nc_)+canal] = 0
+            visited[nr, nc_] = True
+            stack.append((nr, nc_))
+        else:
+            stack.pop()   # retroceder (backtrack)
+ 
+    # ── Forzar perímetro sellado ───────────────────────────────────────────
+    aa[:gp, :]  = 1
+    aa[-gp:, :] = 1
+    aa[:, :gp]  = 1
+    aa[:, -gp:] = 1
+ 
+    return aa
+
+
 if __name__ == '__main__':
     #lab = generar_laberinto(L=501, l=65, n=0.67, grosor=4)
     #lab = generar_laberinto_2(L=501, canal=55, peso=-0.3, grosor = 3)
-    lab = generar_laberinto_3(L=1001, canal=85, peso=-0.3)
+    lab = generar_laberinto_perfecto(dimx=1001, canal=80, grosor_pared=2, semilla=None)
     plt.pcolormesh(lab, cmap='binary')
     plt.axis('off')
     plt.tight_layout()

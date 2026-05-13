@@ -4,6 +4,7 @@ import os
 from bucle import dufort_frankel
 from generar_laberinto import generar_laberinto
 from generar_laberinto import generar_laberinto_3
+from generar_laberinto import generar_laberinto_perfecto
 from collections import deque
 import sys
 
