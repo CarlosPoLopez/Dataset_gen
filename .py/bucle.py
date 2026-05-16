@@ -6,6 +6,14 @@ import os
 from numba import njit, prange
 
 
+# ─── Parámetro global de snapshots ────────────────────────────────────────────
+# Cambia este valor para controlar cada cuántos pasos se guarda un plot.
+# Ponlo a 0 para desactivar completamente los snapshots intermedios.
+GUARDAR_CADA = 0          # ← comenta/descomenta o ajusta aquí
+# GUARDAR_CADA = 0             # ← desactiva snapshots intermedios
+# ──────────────────────────────────────────────────────────────────────────────
+
+
 @njit(parallel=True, cache=True)
 def _paso_dufort_frankel(u, v, u_old, v_old, u_new, v_new,
                           F, Cu, Cv, deltat, epsilon, alpha, beta, N):
@@ -43,10 +51,23 @@ def _guardar_plot(u, F, N, ruta):
     plt.close(fig)
 
 
+def _snapshot(u, F, N, carpeta, prefijo, job_id, paso):
+    """Guarda un plot intermedio con el número de paso en el nombre.
+    
+    Para desactivar todos los snapshots intermedios basta con comentar
+    las llamadas a esta función en dufort_frankel y FCTS, o con poner
+    guardar_cada=0 al llamar a dichas funciones.
+    """
+    os.makedirs(carpeta, exist_ok=True)
+    ruta = os.path.join(carpeta, f'{prefijo}_{job_id}_paso{paso:010d}.png')
+    _guardar_plot(u, F, N, ruta)
+
+
 def dufort_frankel(u, v, u_max, v_max, u_min, v_min,
                    deltat, deltax, N, T,
                    epsilon, alpha, beta, Du, Dv, F,
-                   job_id):
+                   job_id,
+                   guardar_cada=GUARDAR_CADA):   # ← 0 = sin snapshots intermedios
 
     u     = np.ascontiguousarray(u, dtype=np.float64)
     v     = np.ascontiguousarray(v, dtype=np.float64)
@@ -81,13 +102,21 @@ def dufort_frankel(u, v, u_max, v_max, u_min, v_min,
         np.add(u_n, u_np1, out=u_n);  u_n *= 0.5
         np.add(v_n, v_np1, out=v_n);  v_n *= 0.5
 
+        # ── Snapshot intermedio ───────────────────────────────────────────────
+        # Comenta el bloque siguiente para desactivar los snapshots intermedios
+        if guardar_cada and (t + 1) % guardar_cada == 0:
+            _snapshot(u_n, F, N, 'Dataset_Plots/snapshots_df',
+                      'df', job_id, t + 1)
+        # ─────────────────────────────────────────────────────────────────────
+
     return u_n, v_n
 
 
 def FCTS(u, v, u_max, v_max, u_min, v_min,
          deltat, deltax, N, T,
          epsilon, alpha, beta, Du, Dv, F,
-         job_id):
+         job_id,
+         guardar_cada=GUARDAR_CADA):             # ← 0 = sin snapshots intermedios
 
     u     = np.ascontiguousarray(u, dtype=np.float64)
     v     = np.ascontiguousarray(v, dtype=np.float64)
@@ -112,6 +141,13 @@ def FCTS(u, v, u_max, v_max, u_min, v_min,
 
         u_n, u_np1 = u_np1, u_n
         v_n, v_np1 = v_np1, v_n
+
+        # ── Snapshot intermedio ───────────────────────────────────────────────
+        # Comenta el bloque siguiente para desactivar los snapshots intermedios
+        if guardar_cada and (t + 1) % guardar_cada == 0:
+            _snapshot(u_n, F, N, 'Dataset_Plots/snapshots_fcts',
+                      'fcts', job_id, t + 1)
+        # ─────────────────────────────────────────────────────────────────────
 
     _guardar_plot(u_n, F, N, f'Dataset_Plots/vuelta_{job_id}.png')
 

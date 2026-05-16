@@ -5,14 +5,12 @@ from bucle import dufort_frankel
 from generar_laberinto import generar_laberinto
 from generar_laberinto import generar_laberinto_3
 from generar_laberinto import generar_laberinto_perfecto
+from generar_laberinto import dimx_exacto
 from collections import deque
 import sys
 
 def laberinto_tiene_solucion(matriz, start, end):
 
-    """Comprueba rápidamente si existe un camino de 0s (pasillos) 
-    entre el punto de inicio y el punto final.
-    """
     N_filas, N_cols = matriz.shape
     visitados = set()
     cola = deque([start])
@@ -43,19 +41,21 @@ def laberinto_tiene_solucion(matriz, start, end):
 job_id = sys.argv[1] if len(sys.argv) > 1 else os.getenv('SLURM_ARRAY_TASK_ID', '999')
 np.random.seed(int(job_id))
 
-N = 500
+N = 589
 L = N + 1
-T = 780000 
+T = 3000000 
 
 #Genera laberintos hasta que encuentre uno con salida
 intentos = 0
 while True:
     intentos += 1
     #matriz_laberinto = generar_laberinto_3()
-    matriz_laberinto = generar_laberinto(L, l=65, n=0.67, grosor=4)
-    
-    # Comprobamos un punto en la zona de inicio (ej. 30,30) y otro en el final (ej. N-30, N-30)
-    # Suponemos que en matriz_laberinto el valor 0 es pasillo y 1 es pared.
+    #matriz_laberinto = generar_laberinto(L, l=65, n=0.67, grosor=4)
+    canal = 60
+    gp    = 5
+    nc = 9
+    dimx  = dimx_exacto(nc=nc, canal=canal, grosor_pared=gp)  
+    matriz_laberinto = generar_laberinto_perfecto(dimx=dimx, canal=canal, grosor_pared=gp, semilla=None)
     if laberinto_tiene_solucion(matriz_laberinto, start=(30, 30), end=(N-30, N-30)):
         break # Salimos del bucle con un laberinto bueno
     else:
